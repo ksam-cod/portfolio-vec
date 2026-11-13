@@ -10,6 +10,7 @@ export function ContactSection() {
   const [message, setMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
+  const [sending, setSending] = useState(false);
 
   const handleCopy = async (value: string, field: 'email' | 'phone') => {
     try {
@@ -53,14 +54,32 @@ export function ContactSection() {
     URL.revokeObjectURL(url);
   };
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!name.trim() || !email.trim() || !message.trim()) {
       setError('Please complete your name, email address, and message.');
       return;
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError('Please enter a valid email address.');
+      return;
+    }
     setError('');
-    setSubmitted(true);
+    setSending(true);
+    try {
+      const formData = new FormData(e.currentTarget);
+      const response = await fetch('/__forms.html', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(formData as unknown as Record<string, string>).toString(),
+      });
+      if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
+      setSubmitted(true);
+    } catch {
+      setError(`Your message couldn't be sent. Please try again, or email me directly at ${PROFILE.email}.`);
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -199,10 +218,10 @@ export function ContactSection() {
                     <Check className="w-5 h-5" aria-hidden="true" />
                   </div>
                   <h3 className="font-display text-2xl font-bold text-[#111113]">
-                    Message Prepared for {name}
+                    Thanks, {name}. Your message was sent
                   </h3>
                   <p className="text-sm sm:text-base text-zinc-600 max-w-md mx-auto">
-                    Your inquiry regarding <span className="font-medium text-[#111113]">{scope}</span> is ready. You can also reach me directly at{' '}
+                    I received your inquiry about <span className="font-medium text-[#111113]">{scope}</span> and will reply to your email soon. You can also reach me directly at{' '}
                     <a href={`mailto:${PROFILE.email}`} className="text-[#2563EB] underline underline-offset-4">
                       {PROFILE.email}
                     </a>{' '}
@@ -226,7 +245,23 @@ export function ContactSection() {
                   </button>
                 </div>
               ) : (
-                <form onSubmit={handleSubmit} noValidate className="space-y-5">
+                <form
+                  name="contact"
+                  method="POST"
+                  data-netlify="true"
+                  netlify-honeypot="bot-field"
+                  onSubmit={handleSubmit}
+                  noValidate
+                  className="space-y-5"
+                >
+                  <input type="hidden" name="form-name" value="contact" />
+                  <input type="hidden" name="subject" value="New portfolio inquiry: %{submissionId}" />
+                  <input type="hidden" name="topic" value={scope} />
+                  <p className="hidden" aria-hidden="true">
+                    <label>
+                      Don't fill this out: <input name="bot-field" tabIndex={-1} autoComplete="off" />
+                    </label>
+                  </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div>
                       <label htmlFor="contact-name" className="block text-xs font-semibold text-zinc-700 mb-1.5">
@@ -234,6 +269,7 @@ export function ContactSection() {
                       </label>
                       <input
                         id="contact-name"
+                        name="name"
                         type="text"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
@@ -247,6 +283,7 @@ export function ContactSection() {
                       </label>
                       <input
                         id="contact-email"
+                        name="email"
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
@@ -289,6 +326,7 @@ export function ContactSection() {
                     </label>
                     <textarea
                       id="contact-message"
+                      name="message"
                       rows={4}
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
@@ -306,9 +344,10 @@ export function ContactSection() {
                   <div className="flex items-center justify-end">
                     <button
                       type="submit"
-                      className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-lg transition-colors cursor-pointer whitespace-nowrap"
+                      disabled={sending}
+                      className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-60 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer whitespace-nowrap"
                     >
-                      Send Message
+                      {sending ? 'Sending…' : 'Send Message'}
                       <Send className="w-4 h-4" aria-hidden="true" />
                     </button>
                   </div>
